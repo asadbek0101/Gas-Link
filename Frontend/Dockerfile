@@ -1,18 +1,18 @@
 # ── Stage 1: Build ────────────────────────────────────────────
-FROM node:20-alpine AS builder
+FROM node:20-bookworm-slim AS builder
 
 WORKDIR /app
 
-COPY package*.json ./
+# Copy package files
+COPY package.json ./
 
-# Clean install — ignore any Windows node_modules
-RUN npm install
+# Fresh install without lock file — ensures correct Linux binaries
+RUN npm install --no-package-lock
 
+# Copy source
 COPY . .
 
-# Remove any Windows-built node_modules that got copied
-RUN rm -rf node_modules && npm install
-
+# Build
 RUN npm run build
 
 # ── Stage 2: Serve with Nginx ──────────────────────────────────
