@@ -1,0 +1,256 @@
+services:
+
+  # ==================== PostgreSQL ====================
+  postgres:
+    image: postgres:16-alpine
+    container_name: gaslink_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: gaslink
+      POSTGRES_PASSWORD: gaslink_secret_2024
+      POSTGRES_DB: gaslink_db
+    ports:
+      - "5433:5432"
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+      - ./migrations/init.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - gaslink_net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U gaslink -d gaslink_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # ==================== MQTT Broker (Mosquitto) ====================
+  mosquitto:
+    image: eclipse-mosquitto:2
+    container_name: gaslink_mosquitto
+    restart: unless-stopped
+    ports:
+      - "1883:1883"
+    volumes:
+      - ./mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf
+      - mosquitto_data:/mosquitto/data
+    networks:
+      - gaslink_net
+
+  # ==================== Auth Service ====================
+  auth-service:
+    build:
+      context: ./auth-service
+      dockerfile: Dockerfile
+    container_name: gaslink_auth
+    restart: unless-stopped
+    environment:
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_USER: gaslink
+      DB_PASSWORD: gaslink_secret_2024
+      DB_NAME: gaslink_db
+      DB_SSLMODE: disable
+      JWT_SECRET: gaslink-jwt-super-secret-key-2024
+      JWT_EXPIRY: "24h"
+      SERVICE_PORT: "8081"
+    ports:
+      - "8081:8081"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - gaslink_net
+
+  # ==================== User Service ====================
+  user-service:
+    build:
+      context: ./user-service
+      dockerfile: Dockerfile
+    container_name: gaslink_user
+    restart: unless-stopped
+    environment:
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_USER: gaslink
+      DB_PASSWORD: gaslink_secret_2024
+      DB_NAME: gaslink_db
+      DB_SSLMODE: disable
+      SERVICE_PORT: "8082"
+    ports:
+      - "8082:8082"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - gaslink_net
+
+  # ==================== Driver Service ====================
+  driver-service:
+    build:
+      context: ./driver-service
+      dockerfile: Dockerfile
+    container_name: gaslink_driver
+    restart: unless-stopped
+    environment:
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_USER: gaslink
+      DB_PASSWORD: gaslink_secret_2024
+      DB_NAME: gaslink_db
+      DB_SSLMODE: disable
+      SERVICE_PORT: "8083"
+    ports:
+      - "8083:8083"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - gaslink_net
+
+  # ==================== Vehicle Service ====================
+  vehicle-service:
+    build:
+      context: ./vehicle-service
+      dockerfile: Dockerfile
+    container_name: gaslink_vehicle
+    restart: unless-stopped
+    environment:
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_USER: gaslink
+      DB_PASSWORD: gaslink_secret_2024
+      DB_NAME: gaslink_db
+      DB_SSLMODE: disable
+      SERVICE_PORT: "8084"
+    ports:
+      - "8084:8084"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - gaslink_net
+
+  # ==================== Notification Service ====================
+  notification-service:
+    build:
+      context: ./notification-service
+      dockerfile: Dockerfile
+    container_name: gaslink_notification
+    restart: unless-stopped
+    environment:
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_USER: gaslink
+      DB_PASSWORD: gaslink_secret_2024
+      DB_NAME: gaslink_db
+      DB_SSLMODE: disable
+      SERVICE_PORT: "8085"
+    ports:
+      - "8085:8085"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - gaslink_net
+
+  # ==================== Tracker Service ====================
+  tracker-service:
+    build:
+      context: ./tracker-service
+      dockerfile: Dockerfile
+    container_name: gaslink_tracker
+    restart: unless-stopped
+    environment:
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_USER: gaslink
+      DB_PASSWORD: gaslink_secret_2024
+      DB_NAME: gaslink_db
+      DB_SSLMODE: disable
+      SERVICE_PORT: "8086"
+    ports:
+      - "8086:8086"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - gaslink_net
+
+  # ==================== MQTT Service ====================
+  mqtt-service:
+    build:
+      context: ./mqtt-service
+      dockerfile: Dockerfile
+    container_name: gaslink_mqtt
+    restart: unless-stopped
+    environment:
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_USER: gaslink
+      DB_PASSWORD: gaslink_secret_2024
+      DB_NAME: gaslink_db
+      DB_SSLMODE: disable
+      SERVICE_PORT: "8087"
+      MQTT_BROKER: "tcp://mosquitto:1883"
+      MQTT_TOPIC: "devices/#"
+      MQTT_CLIENT_ID: "gaslink-mqtt-service"
+    ports:
+      - "8087:8087"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      mosquitto:
+        condition: service_started
+    networks:
+      - gaslink_net
+
+  # ==================== API Gateway ====================
+  gateway:
+    build:
+      context: ./gateway
+      dockerfile: Dockerfile
+    container_name: gaslink_gateway
+    restart: unless-stopped
+    environment:
+      GATEWAY_PORT: "8080"
+      AUTH_SERVICE_URL: http://auth-service:8081
+      USER_SERVICE_URL: http://user-service:8082
+      DRIVER_SERVICE_URL: http://driver-service:8083
+      VEHICLE_SERVICE_URL: http://vehicle-service:8084
+      NOTIFICATION_SERVICE_URL: http://notification-service:8085
+      TRACKER_SERVICE_URL: http://tracker-service:8086
+      MQTT_SERVICE_URL: http://mqtt-service:8087
+      JWT_SECRET: gaslink-jwt-super-secret-key-2024
+    ports:
+      - "8080:8080"
+    depends_on:
+      - auth-service
+      - user-service
+      - driver-service
+      - vehicle-service
+      - notification-service
+      - tracker-service
+      - mqtt-service
+    networks:
+      - gaslink_net
+
+  # ==================== Frontend ====================
+  frontend:
+    build:
+      context: ../Frontend
+      dockerfile: Dockerfile
+    container_name: gaslink_frontend
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    depends_on:
+      - gateway
+    networks:
+      - gaslink_net
+
+volumes:
+  pg_data:
+  mosquitto_data:
+
+networks:
+  gaslink_net:
+    driver: bridge

@@ -1,0 +1,190 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "GasLink Fleet Management API",
+    "description": "Microservice API Gateway for GasLink Fleet Management System.\n\n## Services\n- **Auth Service** — Authentication & JWT tokens\n- **User Service** — User management (CRUD)\n- **Driver Service** — Driver management (CRUD)\n- **Vehicle Service** — Vehicle & Trip management\n- **Notification Service** — System notifications\n\n## Authentication\nAll endpoints except `/auth/login` and `/auth/register` require a Bearer JWT token.",
+    "version": "1.0.0",
+    "contact": { "name": "GasLink Team", "email": "admin@gaslink.uz" }
+  },
+  "servers": [{ "url": "http://localhost:8080", "description": "Local Gateway" }],
+  "components": {
+    "securitySchemes": {
+      "BearerAuth": { "type": "http", "scheme": "bearer", "bearerFormat": "JWT" }
+    },
+    "schemas": {
+      "LoginRequest": {
+        "type": "object",
+        "required": ["email", "password"],
+        "properties": {
+          "email": { "type": "string", "example": "admin@fleetcommand.com" },
+          "password": { "type": "string", "example": "admin123" }
+        }
+      },
+      "RegisterRequest": {
+        "type": "object",
+        "required": ["name", "email", "password"],
+        "properties": {
+          "name": { "type": "string", "example": "John Doe" },
+          "email": { "type": "string", "example": "john@fleet.com" },
+          "password": { "type": "string", "example": "password123" },
+          "role": { "type": "string", "enum": ["admin","manager","dispatcher","viewer"], "example": "viewer" }
+        }
+      },
+      "AuthResponse": {
+        "type": "object",
+        "properties": {
+          "token": { "type": "string" },
+          "user": { "$ref": "#/components/schemas/User" }
+        }
+      },
+      "User": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "name": { "type": "string" },
+          "email": { "type": "string" },
+          "role": { "type": "string" },
+          "status": { "type": "string" },
+          "last_login": { "type": "string", "format": "date-time" },
+          "created_at": { "type": "string", "format": "date-time" }
+        }
+      },
+      "Driver": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "name": { "type": "string" },
+          "phone": { "type": "string" },
+          "experience": { "type": "string" },
+          "rating": { "type": "number" },
+          "trips": { "type": "integer" },
+          "status": { "type": "string", "enum": ["active","vacation","sick"] }
+        }
+      },
+      "Vehicle": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "plate": { "type": "string" },
+          "model": { "type": "string" },
+          "status": { "type": "string", "enum": ["active","maintenance","stopped"] },
+          "driver_name": { "type": "string" },
+          "fuel": { "type": "integer" },
+          "mileage": { "type": "integer" },
+          "lat": { "type": "number" },
+          "lng": { "type": "number" },
+          "speed": { "type": "integer" }
+        }
+      },
+      "Trip": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "vehicle_name": { "type": "string" },
+          "driver_name": { "type": "string" },
+          "route": { "type": "string" },
+          "fuel_used": { "type": "string" },
+          "status": { "type": "string", "enum": ["active","completed","delayed"] }
+        }
+      },
+      "Notification": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "type": { "type": "string", "enum": ["warning","info","error"] },
+          "title": { "type": "string" },
+          "message": { "type": "string" },
+          "is_read": { "type": "boolean" },
+          "created_at": { "type": "string", "format": "date-time" }
+        }
+      },
+      "DashboardStats": {
+        "type": "object",
+        "properties": {
+          "total_vehicles": { "type": "integer" },
+          "on_route": { "type": "integer" },
+          "fuel_consumption": { "type": "string" },
+          "today_mileage": { "type": "string" }
+        }
+      }
+    }
+  },
+  "paths": {
+    "/api/v1/auth/login": {
+      "post": {
+        "tags": ["Auth"],
+        "summary": "User login",
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/LoginRequest" } } } },
+        "responses": { "200": { "description": "Success", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/AuthResponse" } } } } }
+      }
+    },
+    "/api/v1/auth/register": {
+      "post": {
+        "tags": ["Auth"],
+        "summary": "Register new user",
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/RegisterRequest" } } } },
+        "responses": { "201": { "description": "Created", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/AuthResponse" } } } } }
+      }
+    },
+    "/api/v1/users": {
+      "get": {
+        "tags": ["Users"],
+        "summary": "Get all users",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          { "name": "page", "in": "query", "schema": { "type": "integer", "default": 1 } },
+          { "name": "limit", "in": "query", "schema": { "type": "integer", "default": 20 } },
+          { "name": "search", "in": "query", "schema": { "type": "string" } }
+        ],
+        "responses": { "200": { "description": "Success" } }
+      },
+      "post": {
+        "tags": ["Users"],
+        "summary": "Create user",
+        "security": [{ "BearerAuth": [] }],
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "type": "object", "required": ["name","email","role"], "properties": { "name": {"type":"string"}, "email": {"type":"string"}, "role": {"type":"string"}, "status": {"type":"string"} } } } } },
+        "responses": { "201": { "description": "Created" } }
+      }
+    },
+    "/api/v1/users/{id}": {
+      "get": { "tags": ["Users"], "summary": "Get user by ID", "security": [{ "BearerAuth": [] }], "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }], "responses": { "200": { "description": "Success" } } },
+      "put": { "tags": ["Users"], "summary": "Update user", "security": [{ "BearerAuth": [] }], "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }], "requestBody": { "content": { "application/json": { "schema": { "type": "object" } } } }, "responses": { "200": { "description": "Updated" } } },
+      "delete": { "tags": ["Users"], "summary": "Delete user", "security": [{ "BearerAuth": [] }], "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }], "responses": { "200": { "description": "Deleted" } } }
+    },
+    "/api/v1/drivers": {
+      "get": { "tags": ["Drivers"], "summary": "Get all drivers", "security": [{ "BearerAuth": [] }], "parameters": [{ "name": "page", "in": "query", "schema": { "type": "integer" } }, { "name": "limit", "in": "query", "schema": { "type": "integer" } }, { "name": "search", "in": "query", "schema": { "type": "string" } }], "responses": { "200": { "description": "Success" } } },
+      "post": { "tags": ["Drivers"], "summary": "Create driver", "security": [{ "BearerAuth": [] }], "requestBody": { "required": true, "content": { "application/json": { "schema": { "type": "object", "required": ["name","phone","experience"], "properties": { "name": {"type":"string"}, "phone": {"type":"string"}, "experience": {"type":"string"}, "status": {"type":"string"} } } } } }, "responses": { "201": { "description": "Created" } } }
+    },
+    "/api/v1/drivers/{id}": {
+      "get": { "tags": ["Drivers"], "summary": "Get driver", "security": [{ "BearerAuth": [] }], "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }], "responses": { "200": { "description": "Success" } } },
+      "put": { "tags": ["Drivers"], "summary": "Update driver", "security": [{ "BearerAuth": [] }], "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }], "requestBody": { "content": { "application/json": { "schema": { "type": "object" } } } }, "responses": { "200": { "description": "Updated" } } },
+      "delete": { "tags": ["Drivers"], "summary": "Delete driver", "security": [{ "BearerAuth": [] }], "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }], "responses": { "200": { "description": "Deleted" } } }
+    },
+    "/api/v1/vehicles": {
+      "get": { "tags": ["Vehicles"], "summary": "Get all vehicles", "security": [{ "BearerAuth": [] }], "parameters": [{ "name": "page", "in": "query", "schema": { "type": "integer" } }, { "name": "limit", "in": "query", "schema": { "type": "integer" } }, { "name": "search", "in": "query", "schema": { "type": "string" } }], "responses": { "200": { "description": "Success" } } },
+      "post": { "tags": ["Vehicles"], "summary": "Create vehicle", "security": [{ "BearerAuth": [] }], "requestBody": { "required": true, "content": { "application/json": { "schema": { "type": "object", "required": ["plate","model"], "properties": { "plate": {"type":"string"}, "model": {"type":"string"}, "driver_name": {"type":"string"}, "status": {"type":"string"} } } } } }, "responses": { "201": { "description": "Created" } } }
+    },
+    "/api/v1/vehicles/{id}": {
+      "get": { "tags": ["Vehicles"], "summary": "Get vehicle", "security": [{ "BearerAuth": [] }], "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }], "responses": { "200": { "description": "Success" } } },
+      "put": { "tags": ["Vehicles"], "summary": "Update vehicle", "security": [{ "BearerAuth": [] }], "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }], "requestBody": { "content": { "application/json": { "schema": { "type": "object" } } } }, "responses": { "200": { "description": "Updated" } } },
+      "delete": { "tags": ["Vehicles"], "summary": "Delete vehicle", "security": [{ "BearerAuth": [] }], "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }], "responses": { "200": { "description": "Deleted" } } }
+    },
+    "/api/v1/trips": {
+      "get": { "tags": ["Trips"], "summary": "Get all trips", "security": [{ "BearerAuth": [] }], "responses": { "200": { "description": "Success" } } },
+      "post": { "tags": ["Trips"], "summary": "Create trip", "security": [{ "BearerAuth": [] }], "requestBody": { "required": true, "content": { "application/json": { "schema": { "type": "object", "required": ["vehicle_name","driver_name","route"], "properties": { "vehicle_name": {"type":"string"}, "driver_name": {"type":"string"}, "route": {"type":"string"}, "fuel_used": {"type":"string"}, "status": {"type":"string"} } } } } }, "responses": { "201": { "description": "Created" } } }
+    },
+    "/api/v1/dashboard/stats": {
+      "get": { "tags": ["Dashboard"], "summary": "Get dashboard statistics", "security": [{ "BearerAuth": [] }], "responses": { "200": { "description": "Success", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/DashboardStats" } } } } } }
+    },
+    "/api/v1/notifications": {
+      "get": { "tags": ["Notifications"], "summary": "Get all notifications", "security": [{ "BearerAuth": [] }], "responses": { "200": { "description": "Success" } } },
+      "post": { "tags": ["Notifications"], "summary": "Create notification", "security": [{ "BearerAuth": [] }], "requestBody": { "required": true, "content": { "application/json": { "schema": { "type": "object", "required": ["type","title","message"], "properties": { "type": {"type":"string","enum":["warning","info","error"]}, "title": {"type":"string"}, "message": {"type":"string"} } } } } }, "responses": { "201": { "description": "Created" } } }
+    },
+    "/api/v1/notifications/{id}/read": {
+      "put": { "tags": ["Notifications"], "summary": "Mark as read", "security": [{ "BearerAuth": [] }], "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }], "responses": { "200": { "description": "Success" } } }
+    },
+    "/api/v1/notifications/read-all": {
+      "put": { "tags": ["Notifications"], "summary": "Mark all as read", "security": [{ "BearerAuth": [] }], "responses": { "200": { "description": "Success" } } }
+    }
+  }
+}
