@@ -11,6 +11,7 @@ type Config struct {
 	NotificationServiceURL string
 	TrackerServiceURL      string
 	MQTTServiceURL         string
+	FrontendURL            string
 	JWTSecret              string
 }
 
@@ -24,6 +25,7 @@ func Load() *Config {
 		NotificationServiceURL: ge("NOTIFICATION_SERVICE_URL", "http://localhost:8085"),
 		TrackerServiceURL:      ge("TRACKER_SERVICE_URL", "http://localhost:8086"),
 		MQTTServiceURL:         ge("MQTT_SERVICE_URL", "http://localhost:8087"),
+		FrontendURL:            ge("FRONTEND_URL", "http://frontend:3000"),
 		JWTSecret:              ge("JWT_SECRET", "gaslink-jwt-super-secret-key-2024"),
 	}
 }

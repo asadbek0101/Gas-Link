@@ -2,16 +2,18 @@ package main
 
 import (
 	"embed"
+	"io"
 	"log"
 	"net/http"
 	"net/url"
 	"strings"
+	"time"
 
-	"github.com/gin-gonic/gin"
-	"github.com/gorilla/websocket"
 	"github.com/gaslink/gateway/internal/config"
 	"github.com/gaslink/gateway/internal/handler"
 	"github.com/gaslink/gateway/internal/middleware"
+	"github.com/gin-gonic/gin"
+	"github.com/gorilla/websocket"
 )
 
 //go:embed swagger.json
@@ -107,6 +109,12 @@ func main() {
 		protected.DELETE("/notifications/:id", proxy.ProxyTo(cfg.NotificationServiceURL))
 	}
 
+	// ============ Frontend — catch-all ============
+	// All requests that don't match API/WS/Swagger are proxied to the frontend.
+	r.NoRoute(func(c *gin.Context) {
+		proxyToFrontend(c.Writer, c.Request, cfg.FrontendURL)
+	})
+
 	log.Printf("GasLink API Gateway on :%s | Swagger: http://localhost:%s/swagger/", cfg.Port, cfg.Port)
 	r.Run(":" + cfg.Port)
 }
@@ -171,6 +179,43 @@ func proxyWebSocket(w http.ResponseWriter, r *http.Request, targetBaseURL string
 	// Properly close with close message
 	_ = clientConn.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""))
 	_ = backendConn.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""))
+}
+
+// proxyToFrontend proxies all unmatched requests to the React frontend service.
+// This allows the gateway to serve as a single entrypoint for both API and UI.
+func proxyToFrontend(w http.ResponseWriter, r *http.Request, frontendBaseURL string) {
+	target, _ := url.Parse(frontendBaseURL)
+	target.Path = r.URL.Path
+	target.RawQuery = r.URL.RawQuery
+
+	client := &http.Client{Timeout: 30 * time.Second}
+	req, err := http.NewRequest(r.Method, target.String(), r.Body)
+	if err != nil {
+		http.Error(w, "Bad gateway", http.StatusBadGateway)
+		return
+	}
+
+	for key, values := range r.Header {
+		for _, v := range values {
+			req.Header.Add(key, v)
+		}
+	}
+
+	resp, err := client.Do(req)
+	if err != nil {
+		// Frontend not available — return 502
+		http.Error(w, "Frontend unavailable", http.StatusBadGateway)
+		return
+	}
+	defer resp.Body.Close()
+
+	for key, values := range resp.Header {
+		for _, v := range values {
+			w.Header().Add(key, v)
+		}
+	}
+	w.WriteHeader(resp.StatusCode)
+	io.Copy(w, resp.Body)
 }
 
 func corsMiddleware() gin.HandlerFunc {
